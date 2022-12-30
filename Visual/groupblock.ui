@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>GroupBlock</class>
+ <widget class="QDialog" name="GroupBlock">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>825</width>
+    <height>349</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <widget class="QPushButton" name="SuperBlockButton">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>110</y>
+     <width>131</width>
+     <height>91</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Super Block</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="GroupDescriptorsButton">
+   <property name="geometry">
+    <rect>
+     <x>150</x>
+     <y>110</y>
+     <width>131</width>
+     <height>91</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Group Descriptors</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="BlockBitmapButton">
+   <property name="geometry">
+    <rect>
+     <x>280</x>
+     <y>110</y>
+     <width>131</width>
+     <height>91</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Block Bitmap</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="InodeBitmap">
+   <property name="geometry">
+    <rect>
+     <x>410</x>
+     <y>110</y>
+     <width>131</width>
+     <height>91</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Inode Bitmap</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="InodeTableButton">
+   <property name="geometry">
+    <rect>
+     <x>540</x>
+     <y>110</y>
+     <width>131</width>
+     <height>91</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Inode Table</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="DataBlocksButton">
+   <property name="geometry">
+    <rect>
+     <x>670</x>
+     <y>110</y>
+     <width>131</width>
+     <height>91</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Data Blocks</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
