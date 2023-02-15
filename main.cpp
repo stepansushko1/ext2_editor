@@ -15,11 +15,9 @@
 #include <cmath>
 #include <linux/fs.h>
 
-
-#define BLOCK_SIZE 4096
-#define INODE_SIZE 128
-#define BASE_OFFSET 1024
-#define INODE_TABLE 5
+const constexpr int INODE_SIZE = 128;
+const constexpr int BASE_OFFSET = 1024;
+const constexpr int INODE_TABLE = 5;
 
 std::string date_transform(int seconds){
     time_t now = seconds;
@@ -56,7 +54,7 @@ void update_block_bitmap(int fd, int number, int create_delete){
     }
     int to_change = convert_binary_decimal(binary);
 
-    lseek(fd, 3 * 4096 + ceil(convert_binary_decimal(binary) / 8), SEEK_SET);
+    lseek(fd, 3 * BLOCK_SIZE + ceil(convert_binary_decimal(binary) / 8), SEEK_SET);
     write(fd, &to_change, 1);
     free(bitmap);
 };
@@ -81,7 +79,7 @@ void update_inode_bitmap(int fd, int number, int create_delete){
         }
     }
     int to_change = convert_binary_decimal(binary);
-    lseek(fd, 4 * 4096 + ceil(convert_binary_decimal(binary) / 8), SEEK_SET);
+    lseek(fd, 4 * BLOCK_SIZE + ceil(convert_binary_decimal(binary) / 8), SEEK_SET);
     write(fd, &to_change, 1);
     free(bitmap);
 }
@@ -94,7 +92,7 @@ void sync_inode(int fd, int inode_number, ext2_inode * inode){
 void change_mode(int fd,int inode_number, int mode){
     struct ext2_inode inode;
     lseek(fd, (INODE_TABLE*BLOCK_SIZE) + ((inode_number - 1) * INODE_SIZE), SEEK_SET);
-    read(fd,&inode,128);
+    read(fd,&inode,INODE_SIZE);
     inode.i_mode |= mode;
     write(fd, &mode, 2);
 }
@@ -105,7 +103,7 @@ void change_uid(int fd,int inode_number, int uid){
 }
 void change_size(int fd,int inode_number, int size){
     lseek(fd,4 + (INODE_TABLE*BLOCK_SIZE) + ((inode_number - 1) * INODE_SIZE), SEEK_SET);
-    int temp = 100;
+    int temp = 200;
     write(fd, &temp, 2);
 }
 
@@ -163,7 +161,7 @@ void change_flags(int fd,int inode_number, int flag){
 void delete_block(int fd,int inode_number){
     struct ext2_inode inode;
     lseek(fd,(INODE_TABLE*BLOCK_SIZE) + ((inode_number - 1) * INODE_SIZE), SEEK_SET);
-    read(fd,&inode, 128);
+    read(fd,&inode, INODE_SIZE);
     int last_non_zero_block = 0;
     for (size_t i = 0; i < 15; i++){
         if (inode.i_block[i] == 0){
@@ -181,7 +179,7 @@ void delete_block(int fd,int inode_number){
 void append_block(int fd,int inode_number, int block_number){
     struct ext2_inode inode;
     lseek(fd,(INODE_TABLE*BLOCK_SIZE) + ((inode_number - 1) * INODE_SIZE), SEEK_SET);
-    read(fd,&inode, 128);
+    read(fd,&inode, INODE_SIZE);
     int first_zero_block = 0;
     for (size_t i = 0; i < 15; i++){
         if (inode.i_block[i] == 0){
@@ -260,9 +258,6 @@ void access_rights(ext2_inode *inode){
 void get_flags(ext2_inode *inode){
     std::vector<std::string> flags;
     inode->i_flags |= EXT2_SYNC_FL;
-//    tried to set flag here, and it shows, but there are no flags by default
-//    inode->i_flags |= EXT2_SYNC_FL;
-//    inode->i_flags &= ~EXT2_SYNC_FL;
     if (inode->i_flags & EXT2_SYNC_FL){
         flags.emplace_back("EXT2_SYNC_FL");
         std::cout << "FLAG HERE";
@@ -319,11 +314,12 @@ int find_root(int fd){
             entry  = (ext2_dir_entry_2 *)((uint64_t)entry + entry->rec_len);
             s += entry->rec_len;
         }
+        free(block);
     }
     return main_directory_inode;
 }
 
-void print_super(int fd){
+std::vector<int> print_super(int fd){
     struct ext2_super_block super;
     lseek(fd, 1024, SEEK_SET);
     int a = read(fd, &super, sizeof(struct ext2_super_block));
@@ -395,10 +391,11 @@ void print_inode(int fd, ext2_inode * inode){
     read(fd, block, BLOCK_SIZE);
     std::cout << "\n" << "this is block 0 of free inode " << block << "\n";
     std::cout << "\n" << "block 1  = " << inode->i_block[1];
+    free(block);
 }
 
 void print_main_directory(int fd, int inode_number){
-    inode_number = 2;
+//    inode_number = 2;
     struct ext2_inode inode;
     lseek(fd, (INODE_TABLE * BLOCK_SIZE) + ((inode_number - 1) * INODE_SIZE), SEEK_SET);
     int r = read(fd, &inode, sizeof(struct ext2_inode));
@@ -411,8 +408,8 @@ void print_main_directory(int fd, int inode_number){
         int s = 0;
         auto* block = (unsigned char*)malloc(4096);
         struct ext2_dir_entry_2 *entry;
-        lseek(fd, inode.i_block[0]*4096, SEEK_SET);
-        read(fd, block, 4096);
+        lseek(fd, inode.i_block[0]*BLOCK_SIZE, SEEK_SET);
+        read(fd, block, BLOCK_SIZE);
         entry = (ext2_dir_entry_2 *)block;
         while ((s < inode.i_size) && entry->inode) {
             char filename[EXT2_NAME_LEN + 1];
@@ -468,7 +465,9 @@ int count_non_zero_blocks(ext2_inode * inode){
     return i;
 }
 
-int find_file_inode(int fd, std::string name){
+int find_file_inode1(int fd, std::string name){
+    std::cout << "HEEELELELEOOOO";
+    std::cout << "name = " << name;
     int root_number = 2;
     int number_of_nonzero = 0;
     std::vector<ext2_inode> dirs_q;
@@ -484,7 +483,84 @@ int find_file_inode(int fd, std::string name){
     while (found == 0){
         if (S_ISDIR(current_inode.i_mode)){
             int s = 0;
+            struct ext2_dir_entry_2 *entry;
+            number_of_nonzero = count_non_zero_blocks(&current_inode);
+            for (ssize_t i = 0; i < 2; i++){
+                lseek(fd, current_inode.i_block[i]*BLOCK_SIZE, SEEK_SET);
+                auto* block = (unsigned char*)malloc(BLOCK_SIZE);
+                read(fd, block, BLOCK_SIZE);
+                entry = (ext2_dir_entry_2 *)block;
+                int counter = 0;
+                while ((s < current_inode.i_size) && entry->inode) {
+                    counter++;
+                    std::cout << entry->name << "\n";
+                    if (counter > 100){
+                        return 1;
+                    }
+                    struct ext2_inode indir_inode;
+                    char filename[EXT2_NAME_LEN + 1];
+                    std::string temp = std::string(entry->name);
+//                    if (strcmp(entry->name, "t")){
+//                        std::cout << "\nentry inode = "<< entry->inode;
+//                        std::cout << "\nFOUND\n";
+//                        free(block);
+//                        found = 1;
+//                        return entry->inode;
+//                    }
+                    int current_node_number = entry->inode;
+                    std::cout << "inode number = " << entry->inode;
+                    lseek(fd, (INODE_TABLE*BLOCK_SIZE) + ((current_node_number - 1) * INODE_SIZE), SEEK_SET);
+                    r = read(fd, &indir_inode, sizeof(struct ext2_inode));
+                    if (r < 0){
+                        std::cout << "CANT READ";
+                        exit(1);
+                    }
+                    if (S_ISDIR(indir_inode.i_mode)){
+                        if (std::string(entry->name) !="." and std::string(entry->name) !=".."){
+                            dirs_q.push_back(indir_inode);
+                            dirs_q_names.push_back(std::string(entry->name));
+                        }
+                    }
+                    memcpy(filename, entry->name, entry->name_len);
+                    filename[entry->name_len] = 0;
+                    entry  = (ext2_dir_entry_2 *)((uint64_t)entry + entry->rec_len);
+                    s += entry->rec_len;
+                    if (strcmp(filename, "FASMW.exe")){
+                        std::cout << "\nentry inode = "<< entry->inode;
+                        std::cout << "\nFOUND\n";
+                        free(block);
+                        found = 1;
+                        return entry->inode;
+                    }
+                }
+                free(block);
+            }
+            current_inode = dirs_q.front();
+            dirs_q.erase(dirs_q.begin());
+            dirs_q_names.erase(dirs_q_names.begin());
+        }
+    }
+    return -1;
+}
 
+int find_file_inode(int fd, std::string name){
+//    this is a key function for copy, it is broken,
+//an when i tried to fix it, i broke it even more
+    int root_number = 12;
+    int number_of_nonzero = 0;
+    std::vector<ext2_inode> dirs_q;
+    std::vector<std::string> dirs_q_names;
+    struct ext2_inode current_inode;
+    lseek(fd, (INODE_TABLE * BLOCK_SIZE) + ((root_number - 1) * INODE_SIZE), SEEK_SET);
+    int r = read(fd, &current_inode, sizeof(struct ext2_inode));
+    if (r < 0){
+        std::cout << "CANT READ";
+        exit(1);
+    }
+    int found = 0;
+    while (found == 0){
+        if (S_ISDIR(current_inode.i_mode)){
+            int s = 0;
             struct ext2_dir_entry_2 *entry;
             number_of_nonzero = count_non_zero_blocks(&current_inode);
             for (ssize_t i = 0; i < number_of_nonzero; i++){
@@ -495,14 +571,11 @@ int find_file_inode(int fd, std::string name){
                 int counter = 0;
                 while ((s < current_inode.i_size) && entry->inode) {
                     std::cout << "\nentry name = " << entry->name;
-//                    if (counter == 7){
-//                        return 0;
-//                    }
                     counter++;
                     struct ext2_inode indir_inode;
                     char filename[EXT2_NAME_LEN + 1];
                     std::string temp = std::string(entry->name);
-                    if (temp == name){
+                    if (strcmp(entry->name, "eee.txt")){
                         std::cout << "\nentry inode = "<< entry->inode;
                         std::cout << "\nFOUND\n";
                         free(block);
@@ -599,7 +672,6 @@ void find_free_bits(std::string binary,int count, int number_to_find, std::vecto
     }
 }
 
-
 std::vector<int> find_n_free_blocks(int fd, int n){
     int blocks_bitmap = 3;
     unsigned char *bitmap;
@@ -618,7 +690,79 @@ std::vector<int> find_n_free_blocks(int fd, int n){
             break;
         }
     }
+    free(bitmap);
     return free_blocks;
+}
+
+ext2_inode find_file_dir(int fd, std::string name){
+//    start looking for the file from root directory. keeping the last directory we enter
+    std::cout << "name = " << name << "\n";
+    int root_number = 2;
+    int number_of_nonzero = 0;
+    std::vector<ext2_inode> dirs_q;
+    std::vector<std::string> dirs_q_names;
+    struct ext2_inode current_inode;
+    lseek(fd, (INODE_TABLE * BLOCK_SIZE) + ((root_number - 1) * INODE_SIZE), SEEK_SET);
+    int r = read(fd, &current_inode, sizeof(struct ext2_inode));
+    if (r < 0){
+        std::cout << "CANT READ";
+        exit(1);
+    }
+    int found = 0;
+    while (found == 0){
+        if (S_ISDIR(current_inode.i_mode)){
+            int s = 0;
+            struct ext2_dir_entry_2 *entry;
+            number_of_nonzero = count_non_zero_blocks(&current_inode);
+            for (ssize_t i = 0; i < number_of_nonzero; i++){
+                lseek(fd, current_inode.i_block[i]*BLOCK_SIZE, SEEK_SET);
+                auto* block = (unsigned char*)malloc(BLOCK_SIZE);
+                read(fd, block, BLOCK_SIZE);
+                entry = (ext2_dir_entry_2 *)block;
+                int counter = 0;
+                while ((s < current_inode.i_size) && entry->inode) {
+                    std::cout << "\nentry name = " << entry->name;
+//                    if (counter == 7){
+//                        return 0;
+//                    }
+                    counter++;
+                    struct ext2_inode indir_inode;
+                    char filename[EXT2_NAME_LEN + 1];
+                    std::string temp = std::string(entry->name);
+                    if (temp == name){
+                        std::cout << "name = "<<name;
+                        std::cout << "\nentry inode = "<< entry->inode;
+                        std::cout << "\nFOUND\n";
+                        free(block);
+                        found = 1;
+                        return current_inode;
+                    }
+                    int current_node_number = entry->inode;
+                    lseek(fd, (INODE_TABLE*BLOCK_SIZE) + ((current_node_number - 1) * INODE_SIZE), SEEK_SET);
+                    r = read(fd, &indir_inode, sizeof(struct ext2_inode));
+                    if (r < 0){
+                        std::cout << "CANT READ";
+                        exit(1);
+                    }
+                    if (S_ISDIR(indir_inode.i_mode)){
+                        if (std::string(entry->name) !="." and std::string(entry->name) !=".."){
+                            dirs_q.push_back(indir_inode);
+                            dirs_q_names.push_back(std::string(entry->name));
+                        }
+                    }
+                    memcpy(filename, entry->name, entry->name_len);
+                    filename[entry->name_len] = 0;
+                    entry  = (ext2_dir_entry_2 *)((uint64_t)entry + entry->rec_len);
+                    s += entry->rec_len;
+                }
+                free(block);
+            }
+            current_inode = dirs_q.front();
+            dirs_q.erase(dirs_q.begin());
+            dirs_q_names.erase(dirs_q_names.begin());
+        }
+    }
+
 }
 
 std::vector<int> find_free_inode(int fd){
@@ -650,6 +794,138 @@ void fill_block(int fd,int number,std::string content){
     write(fd,content.c_str(), content.size());
 }
 
+std::string block_bitmap(int fd){
+    auto *bitmap = (unsigned char*)malloc(BLOCK_SIZE);
+    lseek(fd,1024 + (3 * BLOCK_SIZE), SEEK_SET);
+    int r = read(fd, bitmap, sizeof(struct ext2_inode));
+    std::string result;
+    for (int i =0; i<=510;i++) {
+        result += std::to_string(bitmap[i]) + " ";
+    }
+    std::cout<< result;
+}
+
+
+int find_padding_dir(int fd, int inode_number){
+    struct ext2_inode inode;
+    lseek(fd, (INODE_TABLE * BLOCK_SIZE) + ((inode_number - 1) * INODE_SIZE), SEEK_SET);
+    int r = read(fd, &inode, sizeof(struct ext2_inode));
+    if (r < 0){
+        std::cout << "CANT READ";
+        exit(1);
+    }
+    int s = 0;
+    int temp_s = 0;
+    int counter = 0;
+    int ifnull;
+    if (S_ISDIR(inode.i_mode)) {
+        auto* block = (unsigned char*)malloc(4096);
+        struct ext2_dir_entry_2 *entry;
+        lseek(fd, inode.i_block[0]*BLOCK_SIZE, SEEK_SET);
+        read(fd, block, BLOCK_SIZE);
+        entry = (ext2_dir_entry_2 *)block;
+        while ((s < inode.i_size) && entry->inode) {
+            temp_s = s;
+
+            char filename[EXT2_NAME_LEN + 1];
+            int current_node_number = entry->inode;
+            memcpy(filename, entry->name, entry->name_len);
+            filename[entry->name_len] = 0;
+//            std::cout << "filename = " << filename << "\n";
+//            std::cout << "inode if null = " << entry->inode << "\n";
+//            std::cout << "padding = " << s << "\n";
+//            std::cout << "rec len = " << entry->rec_len << "\n";
+            entry  = (ext2_dir_entry_2 *)((uint64_t)entry + entry->rec_len);
+            temp_s = s;
+            s += entry->rec_len;
+            if (entry->rec_len > 255){
+                temp_s += 8 + entry->name_len + (4 - ((8 + entry->name_len) % 4) );
+                std::cout << "final s = " << temp_s;
+                return temp_s;
+            }
+
+//            if (s == 4084){
+//                std::cout << "THIS IS INODE = "<< entry->inode << "\n";
+//                std::cout << temp_s;
+//                return temp_s;
+//            }
+        }
+        free(block);
+    }
+    std::cout << temp_s;
+    return s;
+}
+
+void move_copy(int fd, std::string file, std::string destination, int move){
+    int file_inode = find_file_inode(fd, file);
+    exit(0);
+    int destination_directory_inode = find_file_inode(fd, destination);
+
+//    int destination_directory_inode = 2;
+    std::cout << "DESTINATION = " <<destination_directory_inode << "\n";
+    std::cout << "\n";
+    int record_len = 8;
+    if (move){
+        //    we need to find current files directory to delete this file from the current directory if it is mv
+        ext2_inode current_directory = find_file_dir(fd, file);
+    }
+    else{
+//        modify destination directory
+        struct ext2_inode current_inode;
+        lseek(fd, (INODE_TABLE * BLOCK_SIZE) + ((destination_directory_inode - 1) * INODE_SIZE), SEEK_SET);
+        int r = read(fd, &current_inode, sizeof(struct ext2_inode));
+        if (r < 0){
+            std::cout << "CANT READ";
+            exit(1);
+        }
+        if (!S_ISDIR(current_inode.i_mode)){
+            std::cout<< "NOT A DIRECTORY";
+            exit(1);
+        }
+        int s = find_padding_dir(fd,destination_directory_inode);
+        exit(0);
+        //    s is a padding, where we start to write
+        record_len = 4096-s;
+        int allignment_padding = 0;
+        std::string nullstr;
+        if (record_len % 4 != 0){
+            allignment_padding = 4 - record_len % 4;
+        }
+        for (size_t i = 0; i < allignment_padding;++i){
+            nullstr += '\0';
+        }
+        record_len -= allignment_padding;
+//        inode number
+        lseek(fd, (current_inode.i_block[0] * BLOCK_SIZE + s), SEEK_SET);
+        write(fd,&file_inode, 4);
+        s += 4;
+//        length of a record
+        lseek(fd, (current_inode.i_block[0] * BLOCK_SIZE  + s), SEEK_SET);
+        write(fd,&record_len,2);
+//        name length
+        int name_length = file.size();
+        s += 2;
+        lseek(fd, (current_inode.i_block[0] * BLOCK_SIZE  + s), SEEK_SET);
+        write(fd, &name_length, 1);
+//        file type
+        s += 1;
+        int file_type = 1;
+        lseek(fd, (current_inode.i_block[0] * BLOCK_SIZE  + s), SEEK_SET);
+        write(fd, &file_type, 1);
+//        file name
+        s += 1;
+        lseek(fd, (current_inode.i_block[0] * BLOCK_SIZE  + s), SEEK_SET);
+        write(fd, file.c_str(), name_length);
+//        allignement padding if needed
+        s += name_length;
+        if (allignment_padding) {
+            lseek(fd, (current_inode.i_block[0] * BLOCK_SIZE  + s), SEEK_SET);
+            write(fd, nullstr.c_str(), allignment_padding);
+        }
+    }
+}
+
+
 int main() {
     int fd;
     fd = open("/dev/sda4", O_RDWR);    /* open floppy device */
@@ -657,19 +933,5 @@ int main() {
         std::cout << "image cant open i";
         exit(0);
     }
-    ext2_inode inode;
-    lseek(fd,(5*BLOCK_SIZE) + ((20 - 1) * 128), SEEK_SET);
-    read(fd, &inode, 128);
-//    change_size(fd, 20, 100);
-//    change_mtime(fd,20,1);
-    change_flags(fd, 20,EXT2_SYNC_FL);
-    sync_inode(fd,20,&inode);
-    print_inode(fd, &inode);
-    get_flags(&inode);
-//    print_inode(fd, &inode);
-//    std::vector<int> v = find_n_free_blocks(fd,5);
-//    for (size_t i = 0; i <v.size(); i++){
-//        std::cout << "\n" << v[i];
-//    }
     return 0;
 }
